@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+build/
+dist/
+
+# TDM runtime artifacts - never commit these
+*.session
+*.session-journal
+config.json
+tdm.db
+downloads/
+logs/
+export.csv
+export.json
+.pytest_cache/
