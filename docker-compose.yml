@@ -1,0 +1,15 @@
+services:
+  TelegramDataManager:
+    image: prateekrajgautam/telegramdatamanager:latest
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    user: 1000:100
+    volumes:
+      - ./offline/:/zdata/offline/
+      - ./config:/src/config
+    working_dir: /src
+    stdin_open: true
+    tty: true
+    command: python3 main.py
+networks: {}
