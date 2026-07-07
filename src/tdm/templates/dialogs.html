@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Chats — Telegram Data Manager{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Your chats</h1>
+  <input id="filter" placeholder="Filter by name…" oninput="renderList()">
+  <div id="dialog-list" class="dialog-list">Loading…</div>
+</div>
+
+<dialog id="download-modal" class="modal">
+  <form method="dialog" class="card narrow">
+    <h2 id="modal-title">Start a job</h2>
+    <div id="modal-tabs" class="tabs">
+      <button type="button" class="tab active" onclick="switchTab('download')">Download media</button>
+      <button type="button" class="tab" onclick="switchTab('export')">Export metadata</button>
+      <button type="button" class="tab" onclick="switchTab('forward')">Forward messages</button>
+    </div>
+
+    <div id="tab-download">
+      <label>Media types</label>
+      <div class="checks">
+        <label><input type="checkbox" value="photo" checked> Photos</label>
+        <label><input type="checkbox" value="video" checked> Videos</label>
+        <label><input type="checkbox" value="document" checked> Documents</label>
+        <label><input type="checkbox" value="audio" checked> Audio</label>
+        <label><input type="checkbox" value="voice" checked> Voice notes</label>
+      </div>
+      <label>Limit (blank = all)</label>
+      <input id="dl-limit" type="number" placeholder="e.g. 500">
+    </div>
+
+    <div id="tab-export" class="hidden">
+      <label>Format</label>
+      <select id="exp-format" onchange="updateExportHelp()">
+        <option value="json">JSON</option>
+        <option value="csv">CSV</option>
+        <option value="html">HTML (browsable)</option>
+      </select>
+      <p id="exp-help" class="muted export-help"></p>
+      <label>Limit (blank = all)</label>
+      <input id="exp-limit" type="number" placeholder="e.g. 5000">
+    </div>
+
+    <div id="tab-forward" class="hidden">
+      <label>Forward to</label>
+      <select id="fwd-target"></select>
+      <label>Message types to forward</label>
+      <div class="checks">
+        <label><input type="checkbox" class="fwd-media" value="photo"> Photos</label>
+        <label><input type="checkbox" class="fwd-media" value="video"> Videos</label>
+        <label><input type="checkbox" class="fwd-media" value="document"> Documents</label>
+        <label><input type="checkbox" class="fwd-media" value="audio"> Audio</label>
+        <label><input type="checkbox" class="fwd-media" value="voice"> Voice notes</label>
+      </div>
+      <p class="muted">Leave all unchecked to forward every message, including text.</p>
+      <label>Limit (blank = all)</label>
+      <input id="fwd-limit" type="number" placeholder="e.g. 200">
+      <p class="muted">Forwards are paced (~2s apart) and will back off automatically if Telegram rate-limits the account. Only forward content you have the right to share, and avoid using this for spam or mass-unsolicited distribution — bulk forwarding can violate Telegram's Terms of Service if misused.</p>
+      <label><input type="checkbox" id="fwd-confirm" style="width:auto;display:inline-block;margin-right:.4rem"> I understand and will use this responsibly</label>
+    </div>
+
+    <div id="storage-target-field">
+      <label>Storage target</label>
+      <select id="storage-target"><option value="">Default local download folder</option></select>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeModal()">Cancel</button>
+      <button type="button" onclick="startJob()">Start</button>
+    </div>
+    <p id="modal-msg" class="msg"></p>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+let allDialogs = [];
+let activeDialog = null;
+let activeTab = 'download';
+
+const EXPORT_HELP = {
+  json: 'Machine-readable, one record per message (id, date, sender, text, media type). Best if you plan to process the data with a script or import it elsewhere.',
+  csv: 'Spreadsheet-friendly rows and columns. Best for opening in Excel/Sheets to filter, sort, or analyze message activity.',
+  html: 'A single self-contained, browsable page you can open in any browser to read the conversation like a chat log. Best for a human-readable archive.',
+};
+function updateExportHelp() {
+  const fmt = document.getElementById('exp-format').value;
+  document.getElementById('exp-help').textContent = EXPORT_HELP[fmt] || '';
+}
+
+async function loadDialogs() {
+  allDialogs = await api('/api/dialogs');
+  renderList();
+}
+
+function renderList() {
+  const filter = document.getElementById('filter').value.toLowerCase();
+  const el = document.getElementById('dialog-list');
+  const items = allDialogs.filter(d => d.name.toLowerCase().includes(filter));
+  el.innerHTML = items.map(d => `
+    <div class="dialog-row">
+      <div>
+        <strong>${escapeHtml(d.name)}</strong>
+        <span class="badge">${d.type}</span>
+      </div>
+      <button onclick='openModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Manage</button>
+    </div>`).join('') || '<p class="muted">No chats match.</p>';
+}
+
+async function loadStorageTargets() {
+  const targets = await api('/api/settings/storage-targets');
+  const sel = document.getElementById('storage-target');
+  sel.innerHTML = '<option value="">Default local download folder</option>' +
+    targets.map(t => `<option value="${t.id}">${escapeHtml(t.name)} (${t.type})</option>`).join('');
+}
+
+function loadForwardTargets() {
+  const sel = document.getElementById('fwd-target');
+  sel.innerHTML = allDialogs
+    .filter(d => d.id !== activeDialog.id)
+    .map(d => `<option value="${d.id}" data-name="${escapeHtml(d.name)}">${escapeHtml(d.name)} (${d.type})</option>`)
+    .join('') || '<option value="">No other chats available</option>';
+}
+
+function openModal(dialog) {
+  activeDialog = dialog;
+  document.getElementById('modal-title').textContent = `Manage: ${dialog.name}`;
+  loadStorageTargets();
+  loadForwardTargets();
+  updateExportHelp();
+  switchTab('download');
+  document.getElementById('download-modal').showModal();
+}
+function closeModal() { document.getElementById('download-modal').close(); }
+
+function switchTab(tab) {
+  activeTab = tab;
+  const tabs = document.querySelectorAll('.tab');
+  const order = ['download', 'export', 'forward'];
+  tabs.forEach((b, i) => b.classList.toggle('active', order[i] === tab));
+  document.getElementById('tab-download').classList.toggle('hidden', tab !== 'download');
+  document.getElementById('tab-export').classList.toggle('hidden', tab !== 'export');
+  document.getElementById('tab-forward').classList.toggle('hidden', tab !== 'forward');
+  document.getElementById('storage-target-field').classList.toggle('hidden', tab === 'forward');
+}
+
+async function startJob() {
+  const storageId = document.getElementById('storage-target').value || null;
+  const msgEl = document.getElementById('modal-msg');
+  try {
+    if (activeTab === 'download') {
+      const mediaTypes = Array.from(document.querySelectorAll('#tab-download input[type=checkbox]:checked')).map(c => c.value);
+      const limit = document.getElementById('dl-limit').value || null;
+      await api('/api/jobs/download', 'POST', {
+        dialog_id: activeDialog.id, dialog_name: activeDialog.name,
+        storage_target_id: storageId ? parseInt(storageId) : null,
+        media_types: mediaTypes, limit: limit ? parseInt(limit) : null,
+      });
+    } else if (activeTab === 'export') {
+      const format = document.getElementById('exp-format').value;
+      const limit = document.getElementById('exp-limit').value || null;
+      await api('/api/jobs/export', 'POST', {
+        dialog_id: activeDialog.id, dialog_name: activeDialog.name,
+        storage_target_id: storageId ? parseInt(storageId) : null,
+        format, limit: limit ? parseInt(limit) : null,
+      });
+    } else {
+      const targetSel = document.getElementById('fwd-target');
+      const targetId = targetSel.value;
+      if (!targetId) { msgEl.textContent = 'Choose a target chat.'; msgEl.className = 'msg error'; return; }
+      const targetName = targetSel.selectedOptions[0]?.dataset.name || targetId;
+      const mediaTypes = Array.from(document.querySelectorAll('.fwd-media:checked')).map(c => c.value);
+      const limit = document.getElementById('fwd-limit').value || null;
+      const confirmed = document.getElementById('fwd-confirm').checked;
+      if (!confirmed) { msgEl.textContent = 'Please confirm responsible use before forwarding.'; msgEl.className = 'msg error'; return; }
+      await api('/api/jobs/forward', 'POST', {
+        dialog_id: activeDialog.id, dialog_name: activeDialog.name,
+        target_dialog_id: targetId, target_dialog_name: targetName,
+        media_types: mediaTypes, limit: limit ? parseInt(limit) : null,
+        confirm_tos: true,
+      });
+    }
+    msgEl.textContent = 'Job started — track progress on the Jobs page.';
+    msgEl.className = 'msg';
+    setTimeout(() => { closeModal(); window.location.href = '/jobs'; }, 900);
+  } catch (e) {
+    msgEl.textContent = e.message;
+    msgEl.className = 'msg error';
+  }
+}
+
+loadDialogs();
+</script>
+{% endblock %}

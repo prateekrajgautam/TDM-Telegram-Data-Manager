@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Login — Telegram Data Manager{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h1>Sign in to Telegram</h1>
+  <p class="muted">Uses your Telegram account via the official MTProto API. Credentials are only stored locally in this container's session files.</p>
+
+  <div id="step-phone" class="step">
+    <label>Phone number</label>
+    <input id="phone" type="text" placeholder="+15551234567">
+    <button onclick="sendCode()">Send code</button>
+  </div>
+
+  <div id="step-code" class="step hidden">
+    <label>Verification code</label>
+    <input id="code" type="text" placeholder="12345">
+    <button onclick="submitCode()">Verify</button>
+  </div>
+
+  <div id="step-password" class="step hidden">
+    <label>Two-factor password</label>
+    <input id="password" type="password" placeholder="Your 2FA password">
+    <button onclick="submitPassword()">Unlock</button>
+  </div>
+
+  <p id="login-msg" class="msg"></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function setMsg(t, isError) {
+  const el = document.getElementById('login-msg');
+  el.textContent = t || '';
+  el.className = 'msg' + (isError ? ' error' : '');
+}
+
+async function sendCode() {
+  const phone = document.getElementById('phone').value.trim();
+  if (!phone) return setMsg('Enter a phone number', true);
+  setMsg('Sending code…');
+  try {
+    await api('/api/auth/send-code', 'POST', {phone});
+    document.getElementById('step-phone').classList.add('hidden');
+    document.getElementById('step-code').classList.remove('hidden');
+    setMsg('Code sent — check Telegram.');
+  } catch (e) { setMsg(e.message, true); }
+}
+
+async function submitCode() {
+  const phone = document.getElementById('phone').value.trim();
+  const code = document.getElementById('code').value.trim();
+  setMsg('Verifying…');
+  try {
+    const r = await api('/api/auth/submit-code', 'POST', {phone, code});
+    if (r.status === 'password_needed') {
+      document.getElementById('step-code').classList.add('hidden');
+      document.getElementById('step-password').classList.remove('hidden');
+      setMsg('Two-factor authentication is enabled — enter your password.');
+    } else {
+      setMsg('Logged in! Redirecting…');
+      window.location.href = '/';
+    }
+  } catch (e) { setMsg(e.message, true); }
+}
+
+async function submitPassword() {
+  const phone = document.getElementById('phone').value.trim();
+  const password = document.getElementById('password').value;
+  setMsg('Verifying…');
+  try {
+    await api('/api/auth/submit-password', 'POST', {phone, password});
+    setMsg('Logged in! Redirecting…');
+    window.location.href = '/';
+  } catch (e) { setMsg(e.message, true); }
+}
+</script>
+{% endblock %}

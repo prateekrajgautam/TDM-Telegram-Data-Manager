@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Telegram Data Manager{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Dashboard</h1>
+  <p class="muted">Signed in as <span id="me">…</span></p>
+  <div class="grid">
+    <a class="tile" href="/dialogs">📥<br>Browse chats & start a download</a>
+    <a class="tile" href="/jobs">⚙️<br>View job progress</a>
+    <a class="tile" href="/settings">💾<br>Configure local & remote storage</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Recent jobs</h2>
+  <div id="recent-jobs">Loading…</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async () => {
+  const status = await api('/api/auth/status');
+  document.getElementById('me').textContent = status.first_name ? `${status.first_name} (${status.phone})` : status.phone;
+  const jobs = await api('/api/jobs');
+  const el = document.getElementById('recent-jobs');
+  if (!jobs.length) { el.textContent = 'No jobs yet.'; return; }
+  el.innerHTML = jobs.slice(0, 8).map(renderJobRow).join('');
+})();
+</script>
+{% endblock %}

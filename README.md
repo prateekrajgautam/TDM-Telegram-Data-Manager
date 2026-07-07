@@ -1,118 +1,69 @@
-# TDM — Telegram Data Manager
+# Telegram Data Manager (TDM) — Web Edition
 
-A `yt-dlp`/`rclone`-style command-line tool for downloading, indexing, and
-managing your own Telegram data via the official MTProto API (through
-[Telethon](https://docs.telethon.dev/)).
-
-> TDM only uses official Telegram APIs. It does not crack security, bypass
-> rate limits, automate spam, or circumvent account restrictions.
-
-## Status
-
-Phase 1 + early Phase 2 from the roadmap: CLI, config, auth, database,
-logging, chat listing, and a working (single-worker) download engine with
-resume support are implemented. Forward engine, filters CLI wiring, and
-the Rich live dashboard are scaffolded but not fully built — see the
-"Roadmap" section below.
-
-## Setup
-
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e .
-```
-
-### Get API credentials
-
-1. Go to <https://my.telegram.org>, log in, open "API development tools".
-2. Create an app and note your **API ID** and **API Hash**.
-3. Configure TDM:
-
-```bash
-tdm config --api-id 123456 --api-hash your_api_hash_here
-```
-
-This writes `config.json` in the current directory. **Never commit this
-file** if it contains real credentials — it's already in `.gitignore`.
-
-### Log in
-
-```bash
-tdm login
-```
-
-First run will ask for your phone number, the OTP sent to Telegram, and
-your 2FA password if you have one set. This creates `telegram.session` —
-treat it like a password (it's chmod'd 600 automatically on Linux/macOS).
-
-## Usage
-
-```bash
-tdm chats                      # list your chats with IDs
-tdm chats --search "family"    # filter by name
-
-tdm backup <chat_id>           # index + download all media (resumable)
-tdm backup <chat_id> --limit 500
-
-tdm retry                      # retry all failed items, any chat
-
-tdm verify                     # check downloaded files for missing/corrupt
-
-tdm export csv --out media.csv
-tdm export json --out media.json
-
-tdm logout                     # revoke session and remove session file
-```
-
-Interrupt a backup with Ctrl+C any time — state lives in `tdm.db` (SQLite),
-so re-running `tdm backup <chat_id>` picks up where it left off and skips
-anything already downloaded.
+A FastAPI web application for backing up, browsing, and exporting your Telegram data, built on Telethon. This is the containerized, browser-based rewrite of the TDM CLI — sign in from a web UI, browse your chats, and kick off download/export jobs that can save directly to a local/mounted directory or stream straight to a remote server over SFTP.
 
 ## Project layout
 
 ```
-tdm/
-  cli.py        Typer command definitions (entry point)
-  auth.py       Telethon login/logout, session handling
-  config.py     pydantic-validated config.json loader
-  database.py   SQLite schema + resume engine + dedup
-  download.py   Download engine: indexing, retry/backoff, FloodWait
-  forward.py    Forward engine (Phase 3 — not yet implemented)
-  filters.py    Date/media/size filter predicates (Phase 3)
-  verify.py     File integrity verification
-  exporter.py   CSV/JSON metadata export
-  logger.py     backup.log / error.log / summary.log setup
-  ui.py         Rich progress dashboard
-  utils.py      Shared helpers
-tests/
-  test_database.py
+telegram-data-manager/
+├── src/app/
+│   ├── main.py            # FastAPI app, page routes, startup/lifespan
+│   ├── config.py          # Settings (env vars)
+│   ├── database.py        # SQLAlchemy models (Account, Job, MediaItem, StorageTarget)
+│   ├── telegram_client.py # Telethon login flow + session management
+│   ├── downloader.py      # Media download engine
+│   ├── exporter.py        # Metadata export (JSON/CSV/HTML)
+│   ├── verify.py          # Checksum verification
+│   ├── storage.py         # Local + SFTP storage backends
+│   ├── jobs.py            # Async job queue/worker
+│   ├── schemas.py         # Pydantic request/response models
+│   ├── routers/           # API routes: auth, dialogs, jobs, settings
+│   ├── templates/         # Jinja2 HTML pages
+│   └── static/            # CSS/JS
+├── Dockerfile
+├── docker-compose.yml         # run the published Docker Hub image
+├── docker-compose-build.yml   # build locally from source
+├── .env.example
+├── dockerhubreadme.md
+└── pyproject.toml / requirements.txt
 ```
 
-## Roadmap
+## Run locally (no Docker)
 
-See the original planning doc for the full feature list (sections 1–28).
-Suggested build order from here:
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # fill in TELEGRAM_API_ID / TELEGRAM_API_HASH
+export PYTHONPATH=src
+python -m uvicorn app.main:app --reload
+```
 
-1. Concurrency: turn `download_pending` into a worker pool (respecting
-   `config.workers`), keeping one queue per chat to avoid triggering
-   throttling from parallel requests against the same peer.
-2. Wire `filters.py` predicates into the `backup` CLI command
-   (`--from`, `--to`, `--media-type`, `--min-size`, etc).
-3. Expand `ui.py` into a live `Rich.Live` dashboard (current file,
-   speed, ETA) once the worker pool reports richer progress events.
-4. Implement `forward.py` with explicit per-run confirmation and
-   conservative default pacing (`forward_delay_seconds` in config).
-5. HTML report export, `tdm stats`, `tdm doctor` diagnostics command.
-6. Phase 5 items: filesystem mounting, sync, plugin support, REST API,
-   Docker image, optional GUI.
+Open http://localhost:8000.
 
-## Security notes
+## Run with Docker
 
-- `telegram.session` and `config.json` (if it holds real credentials)
-  are gitignored by default — keep it that way.
-- Forwarding messages in bulk is the feature most likely to brush up
-  against Telegram's terms of service even though it's done through
-  official APIs; it remains unimplemented here pending the guardrails
-  described in `forward.py`.
-# TDM-Telegram-Data-Manager
+```bash
+cp .env.example .env   # fill in credentials
+docker compose up -d              # pulls prateekrajgautam/telegram-data-manager
+# or build locally instead of pulling:
+docker compose -f docker-compose-build.yml up -d --build
+```
+
+## Build & publish to Docker Hub
+
+```bash
+docker build -t prateekrajgautam/telegram-data-manager:latest .
+docker login
+docker push prateekrajgautam/telegram-data-manager:latest
+```
+
+## Architecture notes
+
+- **Single-worker job engine by default** (`MAX_CONCURRENT_DOWNLOADS=1`) — schema and engine were designed single-worker first, per project convention, with concurrency as an opt-in scale-up.
+- **Storage abstraction** (`storage.py`) lets download/export jobs stream bytes directly to either a local path (map to any host/network-mounted directory via Docker volumes) or a remote SFTP server, with no temp-file intermediate.
+- **Session persistence**: Telethon `.session` files live under `/app/data/sessions`, chmod 600 by convention — mount `/app/data` to a private volume and back it up like a secret.
+- Forwarding/filter engine from the original CLI project is not yet ported to the web edition; the current focus is browse → download/export → verify.
+
+## License / ToS
+
+For personal backups of data you already have access to. Respect [Telegram's Terms of Service](https://telegram.org/tos).

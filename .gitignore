@@ -1,17 +1,21 @@
+# Runtime data (sessions, sqlite db) — never commit
+data/
+downloads/
+*.session
+*.session-journal
+config.json
+.env
+
+# Python
 __pycache__/
 *.pyc
 .venv/
+venv/
 *.egg-info/
 build/
 dist/
 
-# TDM runtime artifacts - never commit these
-*.session
-*.session-journal
-config.json
-tdm.db
-downloads/
-logs/
-export.csv
-export.json
-.pytest_cache/
+# OS/editor
+.DS_Store
+.vscode/
+.idea/

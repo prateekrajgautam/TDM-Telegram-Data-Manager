@@ -27,14 +27,14 @@ docker push "$IMAGE"
 # get image id, tag it with version and push
 IMAGE_ID=$(docker images --format '{{.ID}}' "$IMAGE")
 docker tag "$IMAGE_ID" "$IMAGE_VER"
-docker push "$IMAGE_VER"
+#docker push "$IMAGE_VER"
 
 echo "✅ Done — $IMAGE is live on Docker Hub."
 
 # -----------------------------------------------------------
 # Uncomment below to start and test locally after pushing
 # -----------------------------------------------------------
-# echo "🚀 Starting locally..."
-# docker compose up -d
-# echo "📋 Logs (Ctrl+C to detach)..."
-# docker compose logs -f
+echo "🚀 Starting locally..."
+docker compose up -d
+echo "📋 Logs (Ctrl+C to detach)..."
+docker compose logs -f

@@ -1,4 +1,33 @@
+# Build the Telegram Data Manager image from local source and run it.
+# Usage:
+#   cp .env.example .env   # fill in TELEGRAM_API_ID / TELEGRAM_API_HASH
+#   docker compose -f docker-compose-build.yml up -d --build
+#
+# To publish the freshly-built image to Docker Hub:
+#   docker tag prateekrajgautam/telegramdatamanager:latest prateekrajgautam/telegramdatamanager:$(cat VERSION 2>/dev/null || echo latest)
+#   docker push prateekrajgautam/telegramdatamanager:latest
 services:
-  app:
-    build: .
-    image: "prateekrajgautam/telegramdatamanager:latest"  # This names the built image
+  telegramdatamanager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prateekrajgautam/telegramdatamanager:latest
+    container_name: telegramdatamanager
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    environment:
+      TELEGRAM_API_ID: "${TELEGRAM_API_ID}"
+      TELEGRAM_API_HASH: "${TELEGRAM_API_HASH}"
+      SECRET_KEY: "${SECRET_KEY:-change-me-in-production}"
+      MAX_CONCURRENT_DOWNLOADS: "${MAX_CONCURRENT_DOWNLOADS:-1}"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - ./data:/app/data
+      - ${DOWNLOAD_DIR:-./downloads}:/app/downloads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
