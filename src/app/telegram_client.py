@@ -114,52 +114,52 @@ class TelegramManager:
             "username": me.username,
         }
 
-    async def list_dialogs(self) -> list[dict]:
-        client = self.get_client()
-        result = []
-        async for d in client.iter_dialogs():
-            result.append({
-                "id": str(d.id),
-                "entity_id": d.id,
-                "name": d.name or "(unnamed)",
-                # "type": "channel" if d.is_channel else ("group" if d.is_group else "user"),
-                "type": d.type,
-                "unread_count": d.unread_count,
-            })
-        return result
-
-
-    
     # async def list_dialogs(self) -> list[dict]:
     #     client = self.get_client()
     #     result = []
     #     async for d in client.iter_dialogs():
-    #         # Determine the dialog type
-    #         if d.is_channel:
-    #             dialog_type = "channel"
-    #         elif d.is_group:
-    #             dialog_type = "group"
-    #         elif d.is_user:
-    #             # Check if it's a bot
-    #             try:
-    #                 entity = await client.get_entity(d.id)
-    #                 if hasattr(entity, 'bot') and entity.bot:
-    #                     dialog_type = "bot"
-    #                 else:
-    #                     dialog_type = "user"
-    #             except Exception:
-    #                 dialog_type = "user"
-    #         else:
-    #             dialog_type = "other"
-            
     #         result.append({
     #             "id": str(d.id),
     #             "entity_id": d.id,
     #             "name": d.name or "(unnamed)",
-    #             "type": dialog_type,
+    #             "type": "channel" if d.is_channel else ("group" if d.is_group else "user"),
+    #             # "type": d.type,
     #             "unread_count": d.unread_count,
     #         })
     #     return result
+
+
+    
+    async def list_dialogs(self) -> list[dict]:
+        client = self.get_client()
+        result = []
+        async for d in client.iter_dialogs():
+            # Determine the dialog type
+            if d.is_channel:
+                dialog_type = "channel"
+            elif d.is_group:
+                dialog_type = "group"
+            elif d.is_user:
+                # Check if it's a bot
+                try:
+                    entity = await client.get_entity(d.id)
+                    if hasattr(entity, 'bot') and entity.bot:
+                        dialog_type = "bot"
+                    else:
+                        dialog_type = "user"
+                except Exception:
+                    dialog_type = "user"
+            else:
+                dialog_type = "other"
+            
+            result.append({
+                "id": str(d.id),
+                "entity_id": d.id,
+                "name": d.name or "(unnamed)",
+                "type": dialog_type,
+                "unread_count": d.unread_count,
+            })
+        return result
 
 
 
