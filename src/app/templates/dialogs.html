@@ -72,6 +72,20 @@
     <p id="modal-msg" class="msg"></p>
   </form>
 </dialog>
+
+<dialog id="chat-modal" class="modal">
+  <div class="card narrow chat-panel">
+    <div class="chat-header">
+      <h2 id="chat-title">Chat</h2>
+      <button type="button" class="secondary" onclick="closeChatModal()">Close</button>
+    </div>
+    <div id="chat-messages" class="chat-messages">Loading…</div>
+    <form id="chat-send-form" class="chat-input-row" onsubmit="return sendChatMessage(event)">
+      <input id="chat-input" placeholder="Message…" autocomplete="off">
+      <button type="submit">Send</button>
+    </form>
+  </div>
+</dialog>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -103,8 +117,12 @@ function renderList() {
       <div>
         <strong>${escapeHtml(d.name)}</strong>
         <span class="badge">${d.type}</span>
+        ${d.archived ? '<span class="badge">archived</span>' : ''}
       </div>
-      <button onclick='openModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Manage</button>
+      <div class="row-actions">
+        <button class="secondary" onclick='openChatModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Chat</button>
+        <button onclick='openModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Manage</button>
+      </div>
     </div>`).join('') || '<p class="muted">No chats match.</p>';
 }
 
@@ -188,6 +206,56 @@ async function startJob() {
     msgEl.textContent = e.message;
     msgEl.className = 'msg error';
   }
+}
+
+let activeChatDialog = null;
+let chatPollTimer = null;
+
+function openChatModal(dialog) {
+  activeChatDialog = dialog;
+  document.getElementById('chat-title').textContent = dialog.name;
+  document.getElementById('chat-messages').innerHTML = 'Loading…';
+  document.getElementById('chat-modal').showModal();
+  loadChatMessages();
+  if (chatPollTimer) clearInterval(chatPollTimer);
+  chatPollTimer = setInterval(loadChatMessages, 4000);
+}
+
+function closeChatModal() {
+  document.getElementById('chat-modal').close();
+  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+}
+
+async function loadChatMessages() {
+  if (!activeChatDialog) return;
+  try {
+    const msgs = await api(`/api/dialogs/${activeChatDialog.entity_id}/messages?limit=50`);
+    const el = document.getElementById('chat-messages');
+    el.innerHTML = msgs.slice().reverse().map(m => `
+      <div class="chat-bubble ${m.out ? 'out' : 'in'}">
+        ${!m.out && m.sender_name ? `<div class="chat-sender">${escapeHtml(m.sender_name)}</div>` : ''}
+        <div>${escapeHtml(m.text) || (m.has_media ? `<em>[${escapeHtml(m.media_type || 'media')}]</em>` : '')}</div>
+        <div class="chat-time">${m.date ? new Date(m.date).toLocaleString() : ''}</div>
+      </div>`).join('') || '<p class="muted">No messages yet.</p>';
+    el.scrollTop = el.scrollHeight;
+  } catch (e) {
+    document.getElementById('chat-messages').innerHTML = `<p class="msg error">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function sendChatMessage(ev) {
+  ev.preventDefault();
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text || !activeChatDialog) return false;
+  input.value = '';
+  try {
+    await api(`/api/dialogs/${activeChatDialog.entity_id}/messages`, 'POST', {text});
+    loadChatMessages();
+  } catch (e) {
+    alert(e.message);
+  }
+  return false;
 }
 
 loadDialogs();

@@ -114,53 +114,74 @@ class TelegramManager:
             "username": me.username,
         }
 
-    # async def list_dialogs(self) -> list[dict]:
-    #     client = self.get_client()
-    #     result = []
-    #     async for d in client.iter_dialogs():
-    #         result.append({
-    #             "id": str(d.id),
-    #             "entity_id": d.id,
-    #             "name": d.name or "(unnamed)",
-    #             "type": "channel" if d.is_channel else ("group" if d.is_group else "user"),
-    #             # "type": d.type,
-    #             "unread_count": d.unread_count,
-    #         })
-    #     return result
-
-
-    
     async def list_dialogs(self) -> list[dict]:
         client = self.get_client()
         result = []
-        async for d in client.iter_dialogs():
-            # Determine the dialog type
-            if d.is_channel:
-                dialog_type = "channel"
-            elif d.is_group:
-                dialog_type = "group"
-            elif d.is_user:
-                # Check if it's a bot
-                try:
-                    entity = await client.get_entity(d.id)
-                    if hasattr(entity, 'bot') and entity.bot:
-                        dialog_type = "bot"
-                    else:
-                        dialog_type = "user"
-                except Exception:
+        seen_ids = set()
+        # folder=0 is the default (non-archived) list; folder=1 is Archived
+        # Chats. Telegram frequently auto-archives bot conversations, so a
+        # bot can exist and still never show up if we only look at folder 0.
+        for folder in (0, 1):
+            async for d in client.iter_dialogs(folder=folder):
+                if d.id in seen_ids:
+                    continue
+                seen_ids.add(d.id)
+                entity = d.entity  # already resolved by iter_dialogs — no extra API call
+                if d.is_channel:
+                    dialog_type = "channel"
+                elif d.is_group:
+                    dialog_type = "group"
+                elif getattr(entity, "bot", False):
+                    dialog_type = "bot"
+                elif d.is_user:
                     dialog_type = "user"
-            else:
-                dialog_type = "other"
-            
+                else:
+                    dialog_type = "other"
+
+                result.append({
+                    "id": str(d.id),
+                    "entity_id": d.id,
+                    "name": d.name or "(unnamed)",
+                    "type": dialog_type,
+                    "unread_count": d.unread_count,
+                    "archived": folder == 1,
+                })
+        return result
+
+    async def get_messages(self, dialog_id: int, limit: int = 40, offset_id: int = 0) -> list[dict]:
+        """Fetch recent messages for a chat, newest first, for the chat view."""
+        client = self.get_client()
+        entity = await client.get_entity(dialog_id)
+        me = await client.get_me()
+        result = []
+        async for msg in client.iter_messages(entity, limit=limit, offset_id=offset_id):
+            sender_name = None
+            if msg.sender:
+                sender_name = getattr(msg.sender, "first_name", None) or getattr(msg.sender, "title", None) or getattr(msg.sender, "username", None)
             result.append({
-                "id": str(d.id),
-                "entity_id": d.id,
-                "name": d.name or "(unnamed)",
-                "type": dialog_type,
-                "unread_count": d.unread_count,
+                "id": msg.id,
+                "date": msg.date.isoformat() if msg.date else None,
+                "text": msg.message or "",
+                "out": bool(msg.out),
+                "sender_name": sender_name,
+                "has_media": bool(msg.media),
+                "media_type": type(msg.media).__name__ if msg.media else None,
             })
         return result
 
+    async def send_message(self, dialog_id: int, text: str) -> dict:
+        client = self.get_client()
+        entity = await client.get_entity(dialog_id)
+        msg = await client.send_message(entity, text)
+        return {
+            "id": msg.id,
+            "date": msg.date.isoformat() if msg.date else None,
+            "text": msg.message or "",
+            "out": True,
+            "sender_name": None,
+            "has_media": False,
+            "media_type": None,
+        }
 
 
 manager = TelegramManager()

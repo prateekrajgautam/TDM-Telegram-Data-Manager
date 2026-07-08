@@ -51,8 +51,8 @@ class CreateDownloadJob(BaseModel):
     storage_target_id: Optional[int] = None
     media_types: list[str] = ["photo", "video", "document", "audio", "voice"]
     limit: Optional[int] = None
-    min_id: int = 0
-    max_id: int = 0
+    date_from: Optional[str] = None  # ISO date/datetime, inclusive
+    date_to: Optional[str] = None    # ISO date/datetime, inclusive
     subfolder: Optional[str] = None
 
 
@@ -62,6 +62,36 @@ class CreateExportJob(BaseModel):
     storage_target_id: Optional[int] = None
     format: str = "json"  # json | csv | html
     limit: Optional[int] = None
+
+
+class CreateForwardJob(BaseModel):
+    dialog_id: str
+    dialog_name: Optional[str] = None
+    target_dialog_id: str
+    target_dialog_name: Optional[str] = None
+    media_types: list[str] = []  # empty = forward everything, not just media
+    limit: Optional[int] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    confirm_tos: bool = False
+
+
+class CreateTransferJob(BaseModel):
+    """Unified entry point covering the three supported actions: download
+    only (no forward), forward only (server-to-server, nothing saved
+    locally), or both — which creates one job of each kind against the same
+    filters."""
+    dialog_id: str
+    dialog_name: Optional[str] = None
+    action: str  # "download" | "forward" | "both"
+    storage_target_id: Optional[int] = None       # used by download/both
+    target_dialog_id: Optional[str] = None         # required by forward/both
+    target_dialog_name: Optional[str] = None
+    media_types: list[str] = []
+    limit: Optional[int] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    confirm_tos: bool = False                      # required by forward/both
 
 
 class CreateForwardJob(BaseModel):

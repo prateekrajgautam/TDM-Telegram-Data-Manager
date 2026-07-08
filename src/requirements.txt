@@ -1,5 +1,0 @@
-telethon
-rich
-typer
-pydantic
-aiofiles

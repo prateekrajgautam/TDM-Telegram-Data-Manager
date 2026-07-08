@@ -131,3 +131,16 @@ button:hover { filter: brightness(1.08); }
 dialog.modal { border: none; padding: 0; background: transparent; }
 dialog.modal::backdrop { background: rgba(0,0,0,.6); }
 .modal-actions { display: flex; gap: .6rem; }
+
+.row-actions { display: flex; gap: .5rem; }
+
+.chat-panel { display: flex; flex-direction: column; height: 70vh; max-height: 640px; }
+.chat-header { display: flex; justify-content: space-between; align-items: center; }
+.chat-messages { flex: 1; overflow-y: auto; margin: .8rem 0; padding: .5rem; background: #10131a; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: .5rem; }
+.chat-bubble { max-width: 80%; padding: .5rem .7rem; border-radius: 10px; background: #1c212c; align-self: flex-start; font-size: .88rem; }
+.chat-bubble.out { align-self: flex-end; background: #163a52; }
+.chat-sender { font-size: .72rem; color: var(--accent); margin-bottom: .15rem; }
+.chat-time { font-size: .68rem; color: var(--muted); margin-top: .2rem; }
+.chat-input-row { display: flex; gap: .5rem; margin-top: 0; }
+.chat-input-row input { flex: 1; margin: 0; }
+.chat-input-row button { margin: 0; }

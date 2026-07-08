@@ -4,7 +4,7 @@ import json
 from contextlib import contextmanager
 
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Text, ForeignKey, create_engine
+    Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, create_engine
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -43,10 +43,10 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True)
-    job_type = Column(String, nullable=False)  # "download" | "export"
+    job_type = Column(String, nullable=False)  # "action" (download/forward/both) | "export"
     dialog_id = Column(String, nullable=False)
     dialog_name = Column(String, nullable=True)
-    status = Column(String, default="pending")  # pending/running/completed/failed/cancelled
+    status = Column(String, default="pending")  # pending/running/completed/completed_with_errors/failed/cancelled
     progress = Column(Integer, default=0)
     total = Column(Integer, default=0)
     storage_target_id = Column(Integer, ForeignKey("storage_targets.id"), nullable=True)
@@ -65,6 +65,7 @@ class Job(Base):
 
 class MediaItem(Base):
     __tablename__ = "media_items"
+    __table_args__ = (UniqueConstraint("job_id", "message_id", name="uq_media_item_job_message"),)
 
     id = Column(Integer, primary_key=True)
     job_id = Column(Integer, ForeignKey("jobs.id"), nullable=False)
