@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # Bump this on every meaningful change — shown in logs and /health so you
     # can confirm a deployment is actually running the code you think it is.
-    app_version: str = "0.2.0"
+    app_version: str = "0.2.1"
 
     @property
     def database_url(self) -> str:

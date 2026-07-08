@@ -11,22 +11,52 @@
   <form method="dialog" class="card narrow">
     <h2 id="modal-title">Start a job</h2>
     <div id="modal-tabs" class="tabs">
-      <button type="button" class="tab active" onclick="switchTab('download')">Download media</button>
+      <button type="button" class="tab active" onclick="switchTab('transfer')">Download / Forward</button>
       <button type="button" class="tab" onclick="switchTab('export')">Export metadata</button>
-      <button type="button" class="tab" onclick="switchTab('forward')">Forward messages</button>
     </div>
 
-    <div id="tab-download">
+    <div id="tab-transfer">
+      <label>What do you want to do?</label>
+      <div class="checks">
+        <label><input type="radio" name="action-mode" value="download" checked onchange="updateActionMode()"> Download only</label>
+        <label><input type="radio" name="action-mode" value="forward" onchange="updateActionMode()"> Forward only</label>
+        <label><input type="radio" name="action-mode" value="both" onchange="updateActionMode()"> Download + Forward</label>
+      </div>
+
       <label>Media types</label>
       <div class="checks">
-        <label><input type="checkbox" value="photo" checked> Photos</label>
-        <label><input type="checkbox" value="video" checked> Videos</label>
-        <label><input type="checkbox" value="document" checked> Documents</label>
-        <label><input type="checkbox" value="audio" checked> Audio</label>
-        <label><input type="checkbox" value="voice" checked> Voice notes</label>
+        <label><input type="checkbox" class="tr-media" value="photo" checked> Photos</label>
+        <label><input type="checkbox" class="tr-media" value="video" checked> Videos</label>
+        <label><input type="checkbox" class="tr-media" value="document" checked> Documents</label>
+        <label><input type="checkbox" class="tr-media" value="audio" checked> Audio</label>
+        <label><input type="checkbox" class="tr-media" value="voice" checked> Voice notes</label>
       </div>
-      <label>Limit (blank = all)</label>
-      <input id="dl-limit" type="number" placeholder="e.g. 500">
+      <p class="muted" id="media-hint">Leave all unchecked to include every message, including plain text (forward mode only).</p>
+
+      <label>Period (optional)</label>
+      <div class="date-range">
+        <input id="tr-date-from" type="date">
+        <span class="muted">to</span>
+        <input id="tr-date-to" type="date">
+      </div>
+
+      <label>Limit — max number of messages (blank = all)</label>
+      <input id="tr-limit" type="number" placeholder="e.g. 500">
+
+      <div id="forward-fields" class="hidden">
+        <label>Forward to</label>
+        <select id="fwd-target"></select>
+        <label><input type="checkbox" id="fwd-remove-tag" checked style="width:auto;display:inline-block;margin-right:.4rem"> Remove "Forwarded from" attribution</label>
+        <p class="muted">When checked, messages arrive at the target chat as if sent directly — Telegram's forward header (showing the original chat/sender) is stripped. Uncheck to keep the "Forwarded from" label.</p>
+        <p class="muted"><strong>Server-to-server forward:</strong> Telegram moves the message directly between chats on its own servers. Nothing is downloaded to or stored on this machine unless you also chose "Download + Forward".</p>
+        <p class="muted">Forwards are paced (~2s apart) and back off automatically if Telegram rate-limits the account. Only forward content you have the right to share, and avoid using this for spam or mass-unsolicited distribution — bulk forwarding can violate Telegram's Terms of Service if misused.</p>
+        <label><input type="checkbox" id="fwd-confirm" style="width:auto;display:inline-block;margin-right:.4rem"> I understand and will use this responsibly</label>
+      </div>
+
+      <div id="storage-target-field">
+        <label>Storage target</label>
+        <select id="storage-target"><option value="">Default local download folder</option></select>
+      </div>
     </div>
 
     <div id="tab-export" class="hidden">
@@ -41,30 +71,6 @@
       <input id="exp-limit" type="number" placeholder="e.g. 5000">
     </div>
 
-    <div id="tab-forward" class="hidden">
-      <label>Forward to</label>
-      <select id="fwd-target"></select>
-      <label>Message types to forward</label>
-      <div class="checks">
-        <label><input type="checkbox" class="fwd-media" value="photo"> Photos</label>
-        <label><input type="checkbox" class="fwd-media" value="video"> Videos</label>
-        <label><input type="checkbox" class="fwd-media" value="document"> Documents</label>
-        <label><input type="checkbox" class="fwd-media" value="audio"> Audio</label>
-        <label><input type="checkbox" class="fwd-media" value="voice"> Voice notes</label>
-      </div>
-      <p class="muted"><strong>Server-to-server forward:</strong> Telegram moves the message directly between chats on its own servers. Nothing is downloaded to or stored on this machine.</p>
-      <p class="muted">Leave all unchecked to forward every message, including text.</p>
-      <label>Limit (blank = all)</label>
-      <input id="fwd-limit" type="number" placeholder="e.g. 200">
-      <p class="muted">Forwards are paced (~2s apart) and will back off automatically if Telegram rate-limits the account. Only forward content you have the right to share, and avoid using this for spam or mass-unsolicited distribution — bulk forwarding can violate Telegram's Terms of Service if misused.</p>
-      <label><input type="checkbox" id="fwd-confirm" style="width:auto;display:inline-block;margin-right:.4rem"> I understand and will use this responsibly</label>
-    </div>
-
-    <div id="storage-target-field">
-      <label>Storage target</label>
-      <select id="storage-target"><option value="">Default local download folder</option></select>
-    </div>
-
     <div class="modal-actions">
       <button type="button" class="secondary" onclick="closeModal()">Cancel</button>
       <button type="button" onclick="startJob()">Start</button>
@@ -72,26 +78,12 @@
     <p id="modal-msg" class="msg"></p>
   </form>
 </dialog>
-
-<dialog id="chat-modal" class="modal">
-  <div class="card narrow chat-panel">
-    <div class="chat-header">
-      <h2 id="chat-title">Chat</h2>
-      <button type="button" class="secondary" onclick="closeChatModal()">Close</button>
-    </div>
-    <div id="chat-messages" class="chat-messages">Loading…</div>
-    <form id="chat-send-form" class="chat-input-row" onsubmit="return sendChatMessage(event)">
-      <input id="chat-input" placeholder="Message…" autocomplete="off">
-      <button type="submit">Send</button>
-    </form>
-  </div>
-</dialog>
 {% endblock %}
 {% block scripts %}
 <script>
 let allDialogs = [];
 let activeDialog = null;
-let activeTab = 'download';
+let activeTab = 'transfer';
 
 const EXPORT_HELP = {
   json: 'Machine-readable, one record per message (id, date, sender, text, media type). Best if you plan to process the data with a script or import it elsewhere.',
@@ -120,7 +112,7 @@ function renderList() {
         ${d.archived ? '<span class="badge">archived</span>' : ''}
       </div>
       <div class="row-actions">
-        <button class="secondary" onclick='openChatModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Chat</button>
+        <button class="secondary" onclick='openChatSidebar(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Chat</button>
         <button onclick='openModal(${JSON.stringify(d).replace(/'/g, "&apos;")})'>Manage</button>
       </div>
     </div>`).join('') || '<p class="muted">No chats match.</p>';
@@ -147,7 +139,9 @@ function openModal(dialog) {
   loadStorageTargets();
   loadForwardTargets();
   updateExportHelp();
-  switchTab('download');
+  document.querySelector('input[name="action-mode"][value="download"]').checked = true;
+  switchTab('transfer');
+  updateActionMode();
   document.getElementById('download-modal').showModal();
 }
 function closeModal() { document.getElementById('download-modal').close(); }
@@ -155,48 +149,61 @@ function closeModal() { document.getElementById('download-modal').close(); }
 function switchTab(tab) {
   activeTab = tab;
   const tabs = document.querySelectorAll('.tab');
-  const order = ['download', 'export', 'forward'];
+  const order = ['transfer', 'export'];
   tabs.forEach((b, i) => b.classList.toggle('active', order[i] === tab));
-  document.getElementById('tab-download').classList.toggle('hidden', tab !== 'download');
+  document.getElementById('tab-transfer').classList.toggle('hidden', tab !== 'transfer');
   document.getElementById('tab-export').classList.toggle('hidden', tab !== 'export');
-  document.getElementById('tab-forward').classList.toggle('hidden', tab !== 'forward');
-  document.getElementById('storage-target-field').classList.toggle('hidden', tab === 'forward');
+}
+
+function updateActionMode() {
+  const mode = document.querySelector('input[name="action-mode"]:checked').value;
+  const showForward = mode === 'forward' || mode === 'both';
+  const showStorage = mode === 'download' || mode === 'both';
+  document.getElementById('forward-fields').classList.toggle('hidden', !showForward);
+  document.getElementById('storage-target-field').classList.toggle('hidden', !showStorage);
+  document.getElementById('media-hint').classList.toggle('hidden', mode === 'download');
 }
 
 async function startJob() {
-  const storageId = document.getElementById('storage-target').value || null;
   const msgEl = document.getElementById('modal-msg');
   try {
-    if (activeTab === 'download') {
-      const mediaTypes = Array.from(document.querySelectorAll('#tab-download input[type=checkbox]:checked')).map(c => c.value);
-      const limit = document.getElementById('dl-limit').value || null;
-      await api('/api/jobs/download', 'POST', {
+    if (activeTab === 'transfer') {
+      const mode = document.querySelector('input[name="action-mode"]:checked').value;
+      const mediaTypes = Array.from(document.querySelectorAll('.tr-media:checked')).map(c => c.value);
+      const limit = document.getElementById('tr-limit').value || null;
+      const dateFrom = document.getElementById('tr-date-from').value || null;
+      const dateTo = document.getElementById('tr-date-to').value || null;
+      const storageId = document.getElementById('storage-target').value || null;
+
+      const payload = {
         dialog_id: activeDialog.id, dialog_name: activeDialog.name,
-        storage_target_id: storageId ? parseInt(storageId) : null,
+        action: mode,
         media_types: mediaTypes, limit: limit ? parseInt(limit) : null,
-      });
-    } else if (activeTab === 'export') {
+        date_from: dateFrom, date_to: dateTo,
+        storage_target_id: storageId ? parseInt(storageId) : null,
+      };
+
+      if (mode === 'forward' || mode === 'both') {
+        const targetSel = document.getElementById('fwd-target');
+        const targetId = targetSel.value;
+        if (!targetId) { msgEl.textContent = 'Choose a target chat.'; msgEl.className = 'msg error'; return; }
+        const confirmed = document.getElementById('fwd-confirm').checked;
+        if (!confirmed) { msgEl.textContent = 'Please confirm responsible use before forwarding.'; msgEl.className = 'msg error'; return; }
+        payload.target_dialog_id = targetId;
+        payload.target_dialog_name = targetSel.selectedOptions[0]?.dataset.name || targetId;
+        payload.confirm_tos = true;
+        payload.remove_forward_tag = document.getElementById('fwd-remove-tag').checked;
+      }
+
+      await api('/api/jobs/transfer', 'POST', payload);
+    } else {
       const format = document.getElementById('exp-format').value;
       const limit = document.getElementById('exp-limit').value || null;
+      const storageId = document.getElementById('storage-target').value || null;
       await api('/api/jobs/export', 'POST', {
         dialog_id: activeDialog.id, dialog_name: activeDialog.name,
         storage_target_id: storageId ? parseInt(storageId) : null,
         format, limit: limit ? parseInt(limit) : null,
-      });
-    } else {
-      const targetSel = document.getElementById('fwd-target');
-      const targetId = targetSel.value;
-      if (!targetId) { msgEl.textContent = 'Choose a target chat.'; msgEl.className = 'msg error'; return; }
-      const targetName = targetSel.selectedOptions[0]?.dataset.name || targetId;
-      const mediaTypes = Array.from(document.querySelectorAll('.fwd-media:checked')).map(c => c.value);
-      const limit = document.getElementById('fwd-limit').value || null;
-      const confirmed = document.getElementById('fwd-confirm').checked;
-      if (!confirmed) { msgEl.textContent = 'Please confirm responsible use before forwarding.'; msgEl.className = 'msg error'; return; }
-      await api('/api/jobs/forward', 'POST', {
-        dialog_id: activeDialog.id, dialog_name: activeDialog.name,
-        target_dialog_id: targetId, target_dialog_name: targetName,
-        media_types: mediaTypes, limit: limit ? parseInt(limit) : null,
-        confirm_tos: true,
       });
     }
     msgEl.textContent = 'Job started — track progress on the Jobs page.';
@@ -206,56 +213,6 @@ async function startJob() {
     msgEl.textContent = e.message;
     msgEl.className = 'msg error';
   }
-}
-
-let activeChatDialog = null;
-let chatPollTimer = null;
-
-function openChatModal(dialog) {
-  activeChatDialog = dialog;
-  document.getElementById('chat-title').textContent = dialog.name;
-  document.getElementById('chat-messages').innerHTML = 'Loading…';
-  document.getElementById('chat-modal').showModal();
-  loadChatMessages();
-  if (chatPollTimer) clearInterval(chatPollTimer);
-  chatPollTimer = setInterval(loadChatMessages, 4000);
-}
-
-function closeChatModal() {
-  document.getElementById('chat-modal').close();
-  if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
-}
-
-async function loadChatMessages() {
-  if (!activeChatDialog) return;
-  try {
-    const msgs = await api(`/api/dialogs/${activeChatDialog.entity_id}/messages?limit=50`);
-    const el = document.getElementById('chat-messages');
-    el.innerHTML = msgs.slice().reverse().map(m => `
-      <div class="chat-bubble ${m.out ? 'out' : 'in'}">
-        ${!m.out && m.sender_name ? `<div class="chat-sender">${escapeHtml(m.sender_name)}</div>` : ''}
-        <div>${escapeHtml(m.text) || (m.has_media ? `<em>[${escapeHtml(m.media_type || 'media')}]</em>` : '')}</div>
-        <div class="chat-time">${m.date ? new Date(m.date).toLocaleString() : ''}</div>
-      </div>`).join('') || '<p class="muted">No messages yet.</p>';
-    el.scrollTop = el.scrollHeight;
-  } catch (e) {
-    document.getElementById('chat-messages').innerHTML = `<p class="msg error">${escapeHtml(e.message)}</p>`;
-  }
-}
-
-async function sendChatMessage(ev) {
-  ev.preventDefault();
-  const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text || !activeChatDialog) return false;
-  input.value = '';
-  try {
-    await api(`/api/dialogs/${activeChatDialog.entity_id}/messages`, 'POST', {text});
-    loadChatMessages();
-  } catch (e) {
-    alert(e.message);
-  }
-  return false;
 }
 
 loadDialogs();

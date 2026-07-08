@@ -46,6 +46,7 @@ async def run_forward_job(job_id: int) -> None:
         limit = opts.get("limit")
         date_from = parse_date(opts.get("date_from"))
         date_to = parse_date(opts.get("date_to"))
+        remove_forward_tag = opts.get("remove_forward_tag", True)
         db.query(Job).filter_by(id=job_id).update({Job.output_path: f"forwarded to: {target_label}"})
         done_ids = {
             item.message_id for item in
@@ -88,12 +89,12 @@ async def run_forward_job(job_id: int) -> None:
 
         status, error = "forwarded", None
         try:
-            await client.forward_messages(target, msg.id, source)
+            await client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag)
         except FloodWaitError as e:
             log.warning("Flood wait on job %s: sleeping %ss", job_id, e.seconds)
             await asyncio.sleep(e.seconds)
             try:
-                await client.forward_messages(target, msg.id, source)
+                await client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag)
             except Exception as e2:  # noqa: BLE001
                 status, error = "failed", str(e2)
                 log.warning("Retry failed for message %s in job %s: %s", msg.id, job_id, e2)

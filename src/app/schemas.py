@@ -64,18 +64,6 @@ class CreateExportJob(BaseModel):
     limit: Optional[int] = None
 
 
-class CreateForwardJob(BaseModel):
-    dialog_id: str
-    dialog_name: Optional[str] = None
-    target_dialog_id: str
-    target_dialog_name: Optional[str] = None
-    media_types: list[str] = []  # empty = forward everything, not just media
-    limit: Optional[int] = None
-    date_from: Optional[str] = None
-    date_to: Optional[str] = None
-    confirm_tos: bool = False
-
-
 class CreateTransferJob(BaseModel):
     """Unified entry point covering the three supported actions: download
     only (no forward), forward only (server-to-server, nothing saved
@@ -92,16 +80,7 @@ class CreateTransferJob(BaseModel):
     date_from: Optional[str] = None
     date_to: Optional[str] = None
     confirm_tos: bool = False                      # required by forward/both
-
-
-class CreateForwardJob(BaseModel):
-    dialog_id: str
-    dialog_name: Optional[str] = None
-    target_dialog_id: str
-    target_dialog_name: Optional[str] = None
-    media_types: list[str] = []  # empty = forward everything, not just media
-    limit: Optional[int] = None
-    confirm_tos: bool = False
+    remove_forward_tag: bool = True                 # strip "Forwarded from X" attribution
 
 
 class JobOut(BaseModel):
@@ -114,6 +93,7 @@ class JobOut(BaseModel):
     total: int
     output_path: Optional[str]
     error: Optional[str]
+    failed_count: int = 0
 
     class Config:
         from_attributes = True

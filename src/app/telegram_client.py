@@ -150,14 +150,21 @@ class TelegramManager:
 
     async def get_messages(self, dialog_id: int, limit: int = 40, offset_id: int = 0) -> list[dict]:
         """Fetch recent messages for a chat, newest first, for the chat view."""
+        from app.filters import media_type_of
+
         client = self.get_client()
         entity = await client.get_entity(dialog_id)
-        me = await client.get_me()
         result = []
         async for msg in client.iter_messages(entity, limit=limit, offset_id=offset_id):
             sender_name = None
             if msg.sender:
                 sender_name = getattr(msg.sender, "first_name", None) or getattr(msg.sender, "title", None) or getattr(msg.sender, "username", None)
+            fwd_from = None
+            if msg.fwd_from:
+                fh = getattr(msg.fwd_from, "from_name", None)
+                if not fh and getattr(msg.fwd_from, "from_id", None):
+                    fh = "original chat"
+                fwd_from = fh
             result.append({
                 "id": msg.id,
                 "date": msg.date.isoformat() if msg.date else None,
@@ -165,7 +172,10 @@ class TelegramManager:
                 "out": bool(msg.out),
                 "sender_name": sender_name,
                 "has_media": bool(msg.media),
-                "media_type": type(msg.media).__name__ if msg.media else None,
+                "media_kind": media_type_of(msg),  # photo/video/document/audio/voice/None
+                "file_name": msg.file.name if msg.file else None,
+                "mime_type": msg.file.mime_type if msg.file else None,
+                "forwarded_from": fwd_from,
             })
         return result
 
@@ -180,8 +190,21 @@ class TelegramManager:
             "out": True,
             "sender_name": None,
             "has_media": False,
-            "media_type": None,
+            "media_kind": None,
+            "file_name": None,
+            "mime_type": None,
+            "forwarded_from": None,
         }
+
+
+    async def get_single_message(self, dialog_id: int, message_id: int):
+        client = self.get_client()
+        entity = await client.get_entity(dialog_id)
+        return await client.get_messages(entity, ids=message_id)
+
+    def iter_media_chunks(self, message):
+        client = self.get_client()
+        return client.iter_download(message.media)
 
 
 manager = TelegramManager()
