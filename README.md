@@ -64,6 +64,19 @@ docker push prateekrajgautam/telegram-data-manager:latest
 - **Session persistence**: Telethon `.session` files live under `/app/data/sessions`, chmod 600 by convention — mount `/app/data` to a private volume and back it up like a secret.
 - Forwarding/filter engine from the original CLI project is not yet ported to the web edition; the current focus is browse → download/export → verify.
 
+
+# UI
+
+![](./img/1.png)
+![](./img/2.png)
+![](./img/3.png)
+![](./img/4.png)
+![](./img/5.png)
+![](./img/6.png)
+![](./img/7.png)
+![](./img/8.png)
+![](./img/9.png)
+
 ## License / ToS
 
 For personal backups of data you already have access to. Respect [Telegram's Terms of Service](https://telegram.org/tos).
