@@ -25,7 +25,11 @@ class TelegramManager:
         return str(settings.sessions_dir / f"session_{safe}")
 
     async def send_code(self, phone: str) -> None:
-        client = TelegramClient(self._session_path(phone), settings.telegram_api_id, settings.telegram_api_hash)
+        client = TelegramClient(
+            self._session_path(phone), settings.telegram_api_id, settings.telegram_api_hash,
+            connection_retries=10, retry_delay=2, request_retries=5,
+            timeout=settings.network_call_timeout_seconds, auto_reconnect=True,
+        )
         await client.connect()
         await client.send_code_request(phone)
         self._pending[phone] = client
@@ -78,7 +82,11 @@ class TelegramManager:
                 return False
             phone = account.phone
             session_name = account.session_name
-        client = TelegramClient(session_name, settings.telegram_api_id, settings.telegram_api_hash)
+        client = TelegramClient(
+            session_name, settings.telegram_api_id, settings.telegram_api_hash,
+            connection_retries=10, retry_delay=2, request_retries=5,
+            timeout=settings.network_call_timeout_seconds, auto_reconnect=True,
+        )
         await client.connect()
         if not await client.is_user_authorized():
             return False

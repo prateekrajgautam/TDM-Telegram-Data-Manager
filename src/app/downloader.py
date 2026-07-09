@@ -9,11 +9,15 @@ only pending/failed ones are re-attempted.
 """
 from __future__ import annotations
 
+import datetime
+
 import hashlib
 
 from app.database import get_session, Job, MediaItem
 from app.filters import ALL_MEDIA_TYPES, iter_filtered_messages, media_type_of, parse_date
 from app.logger import get_logger
+from app.netutil import iter_with_timeout, with_timeout
+from app.config import settings
 from app.storage import StorageBackend
 from app.telegram_client import manager as tg_manager
 
@@ -25,6 +29,7 @@ from app.filters import matches_media_types  # noqa: E402,F401
 
 async def run_download_job(job_id: int, backend: StorageBackend) -> None:
     client = tg_manager.get_client()
+    net_timeout = settings.network_call_timeout_seconds
 
     with get_session() as db:
         job = db.query(Job).get(job_id)
@@ -48,31 +53,45 @@ async def run_download_job(job_id: int, backend: StorageBackend) -> None:
     date_to = parse_date(opts.get("date_to"))
 
     try:
-        entity = await client.get_entity(dialog_id)
+        entity = await with_timeout(client.get_entity(dialog_id), net_timeout, "resolving dialog")
     except Exception as e:  # noqa: BLE001
         _fail_job(job_id, f"Could not resolve dialog: {e}")
         return
 
     # First pass: count matching messages for progress total
     total = 0
-    async for _ in iter_filtered_messages(client, entity, media_types, limit, date_from, date_to):
-        total += 1
+    try:
+        async for _ in iter_with_timeout(
+            iter_filtered_messages(client, entity, media_types, limit, date_from, date_to),
+            net_timeout, "listing messages",
+        ):
+            total += 1
+    except Exception as e:  # noqa: BLE001
+        _fail_job(job_id, f"Could not list messages: {e}")
+        return
     with get_session() as db:
         db.query(Job).filter_by(id=job_id).update({Job.total: total})
 
     processed = len(done_ids)
     with get_session() as db:
-        db.query(Job).filter_by(id=job_id).update({Job.progress: processed})
+        db.query(Job).filter_by(id=job_id).update({Job.progress: processed, Job.updated_at: datetime.datetime.utcnow()})
 
     try:
-        async for msg in iter_filtered_messages(client, entity, media_types, limit, date_from, date_to):
+        async for msg in iter_with_timeout(
+            iter_filtered_messages(client, entity, media_types, limit, date_from, date_to),
+            net_timeout, "listing messages",
+        ):
             if msg.id in done_ids:
                 continue  # already downloaded in a previous run — resume skips it
 
             with get_session() as db:
                 current = db.query(Job).get(job_id)
-                if current.status == "cancelled":
-                    log.info("Job %s cancelled, stopping", job_id)
+                if current.status != "running":
+                    # Cancelled, paused, or force-failed by the stale-job
+                    # watchdog while we were mid-flight — stop cleanly
+                    # either way; whatever set this status also decided
+                    # what should happen next (cancel/pause/retry).
+                    log.info("Job %s status changed to %s externally, stopping", job_id, current.status)
                     return
 
             filename = _build_filename(msg)
@@ -81,7 +100,7 @@ async def run_download_job(job_id: int, backend: StorageBackend) -> None:
             size = 0
             try:
                 with backend.open_write(relative_path) as fh:
-                    async for chunk in client.iter_download(msg.media):
+                    async for chunk in iter_with_timeout(client.iter_download(msg.media), net_timeout, "downloading file"):
                         fh.write(chunk)
                         hasher.update(chunk)
                         size += len(chunk)
@@ -109,7 +128,7 @@ async def run_download_job(job_id: int, backend: StorageBackend) -> None:
                 else:
                     db.add(MediaItem(job_id=job_id, message_id=msg.id, **fields))
                 processed += 1
-                db.query(Job).filter_by(id=job_id).update({Job.progress: processed})
+                db.query(Job).filter_by(id=job_id).update({Job.progress: processed, Job.updated_at: datetime.datetime.utcnow()})
 
         with get_session() as db:
             failed_count = db.query(MediaItem).filter_by(job_id=job_id, status="failed").count()

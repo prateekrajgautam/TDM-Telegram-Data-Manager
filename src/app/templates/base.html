@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Telegram Data Manager{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <div id="app">
+    <header class="topbar">
+        <div class="brand"><span class="dot"></span> Telegram Data Manager</div>
+        <nav>
+          <a href="/">Dashboard</a>
+          <a href="/dialogs">Chats</a>
+          <a href="/jobs">Jobs</a>
+          <a href="/settings">Storage</a>
+        </nav>
+        <div id="auth-badge" class="auth-badge">…</div>
+      </header>
+
+
+    <main class="container">
+    <div id="leftchat" class="left">
+      {% block content %}{% endblock %}
+    </div>
+    <div id="rightchat" class="right">
+    <div id="chat-backdrop" class="chat-backdrop" onclick="closeChatSidebar()"></div>
+      <aside id="chat-sidebar" class="chat-sidebar">
+        <div class="chat-header">
+          <h2 id="chat-title">Chat</h2>
+          <button type="button" class="secondary" onclick="closeChatSidebar()">Close</button>
+        </div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <form id="chat-send-form" class="chat-input-row" onsubmit="return sendChatMessage(event)">
+          <input id="chat-input" placeholder="Message…" autocomplete="off">
+          <button type="submit">Send</button>
+        </form>
+      </aside>
+    </div>
+  </main>
+
+  <footer id="footer">
+    <div id="copyright" class="copyrights">
+      <span id="copyurl"> © 2026 <a href="http://mgeek.in">mGeek.in</a></span><span id="copyauthor">Designed by <a id="copyrightauthor" href="https://webmaster.mgeek.in/">Dr. Prateek Raj Gautam</a></span>
+    </div>
+  </footer>
+  </div>
+  
+
+
+
+
+  <script src="/static/js/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

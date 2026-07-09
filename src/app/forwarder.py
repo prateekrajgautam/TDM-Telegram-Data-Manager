@@ -17,6 +17,8 @@ only re-attempts messages that previously failed.
 """
 from __future__ import annotations
 
+import datetime
+
 import asyncio
 
 from telethon.errors import FloodWaitError
@@ -24,6 +26,8 @@ from telethon.errors import FloodWaitError
 from app.database import get_session, Job, MediaItem
 from app.filters import iter_filtered_messages, media_type_of, parse_date
 from app.logger import get_logger
+from app.netutil import iter_with_timeout, with_timeout
+from app.config import settings
 from app.telegram_client import manager as tg_manager
 
 log = get_logger("forwarder")
@@ -33,6 +37,7 @@ _MIN_DELAY_SECONDS = 2.0  # pacing between individual forwards
 
 async def run_forward_job(job_id: int) -> None:
     client = tg_manager.get_client()
+    net_timeout = settings.network_call_timeout_seconds
 
     with get_session() as db:
         job = db.query(Job).get(job_id)
@@ -54,15 +59,22 @@ async def run_forward_job(job_id: int) -> None:
         }
 
     try:
-        source = await client.get_entity(source_id)
-        target = await client.get_entity(target_id)
+        source = await with_timeout(client.get_entity(source_id), net_timeout, "resolving source chat")
+        target = await with_timeout(client.get_entity(target_id), net_timeout, "resolving target chat")
     except Exception as e:  # noqa: BLE001
         _fail_job(job_id, f"Could not resolve source/target chat: {e}")
         return
 
     matched: list = []
-    async for msg in iter_filtered_messages(client, source, media_types, limit, date_from, date_to):
-        matched.append(msg)
+    try:
+        async for msg in iter_with_timeout(
+            iter_filtered_messages(client, source, media_types, limit, date_from, date_to),
+            net_timeout, "listing messages",
+        ):
+            matched.append(msg)
+    except Exception as e:  # noqa: BLE001
+        _fail_job(job_id, f"Could not list messages: {e}")
+        return
 
     total = len(matched)
     with get_session() as db:
@@ -75,7 +87,7 @@ async def run_forward_job(job_id: int) -> None:
 
     done = len(done_ids)
     with get_session() as db:
-        db.query(Job).filter_by(id=job_id).update({Job.progress: done})
+        db.query(Job).filter_by(id=job_id).update({Job.progress: done, Job.updated_at: datetime.datetime.utcnow()})
 
     for msg in reversed(matched):  # oldest first, preserves chronological order at target
         if msg.id in done_ids:
@@ -83,18 +95,26 @@ async def run_forward_job(job_id: int) -> None:
 
         with get_session() as db:
             current = db.query(Job).get(job_id)
-            if current.status == "cancelled":
-                log.info("Forward job %s cancelled, stopping", job_id)
+            if current.status != "running":
+                # Cancelled, paused, or force-failed by the stale-job
+                # watchdog while we were mid-flight — stop cleanly.
+                log.info("Forward job %s status changed to %s externally, stopping", job_id, current.status)
                 return
 
         status, error = "forwarded", None
         try:
-            await client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag)
+            await with_timeout(
+                client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag),
+                net_timeout, "forwarding message",
+            )
         except FloodWaitError as e:
             log.warning("Flood wait on job %s: sleeping %ss", job_id, e.seconds)
             await asyncio.sleep(e.seconds)
             try:
-                await client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag)
+                await with_timeout(
+                    client.forward_messages(target, msg.id, source, drop_author=remove_forward_tag),
+                    net_timeout, "forwarding message (retry)",
+                )
             except Exception as e2:  # noqa: BLE001
                 status, error = "failed", str(e2)
                 log.warning("Retry failed for message %s in job %s: %s", msg.id, job_id, e2)
@@ -110,7 +130,7 @@ async def run_forward_job(job_id: int) -> None:
                 db.add(MediaItem(job_id=job_id, message_id=msg.id, status=status, error=error,
                                   media_type=media_type_of(msg)))
             done += 1
-            db.query(Job).filter_by(id=job_id).update({Job.progress: done})
+            db.query(Job).filter_by(id=job_id).update({Job.progress: done, Job.updated_at: datetime.datetime.utcnow()})
         await asyncio.sleep(_MIN_DELAY_SECONDS)
 
     with get_session() as db:

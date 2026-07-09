@@ -21,6 +21,8 @@ function escapeHtml(s) {
 function renderJobRow(j) {
   const pct = j.total ? Math.min(100, Math.round((j.progress / j.total) * 100)) : (j.status.startsWith('completed') ? 100 : 0);
   const canRetry = ['failed', 'completed_with_errors', 'cancelled'].includes(j.status) && (j.job_type === 'download' || j.job_type === 'forward');
+  const canPause = ['pending', 'running'].includes(j.status) && (j.job_type === 'download' || j.job_type === 'forward');
+  const canResume = j.status === 'paused';
   return `
     <div class="job-row">
       <div class="job-top">
@@ -29,7 +31,9 @@ function renderJobRow(j) {
       </div>
       <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       <div class="muted" style="margin-top:.3rem">${j.progress}/${j.total || '?'}${j.failed_count ? ` • ${j.failed_count} failed` : ''} ${j.output_path ? '• ' + escapeHtml(j.output_path) : ''}${j.error ? ' • ' + escapeHtml(j.error) : ''}</div>
-      <div style="display:flex;gap:.5rem">
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        ${canPause ? `<button class="secondary" style="margin-top:.5rem" onclick="pauseJob(${j.id})">Pause</button>` : ''}
+        ${canResume ? `<button class="secondary" style="margin-top:.5rem" onclick="resumeJob(${j.id})">Resume</button>` : ''}
         ${(j.status === 'pending' || j.status === 'running') ? `<button class="secondary" style="margin-top:.5rem" onclick="cancelJob(${j.id})">Cancel</button>` : ''}
         ${canRetry ? `<button class="secondary" style="margin-top:.5rem" onclick="retryJob(${j.id})">Retry</button>` : ''}
       </div>
@@ -38,6 +42,16 @@ function renderJobRow(j) {
 
 async function cancelJob(id) {
   await api(`/api/jobs/${id}/cancel`, 'POST');
+  if (typeof refresh === 'function') refresh();
+}
+
+async function pauseJob(id) {
+  await api(`/api/jobs/${id}/pause`, 'POST');
+  if (typeof refresh === 'function') refresh();
+}
+
+async function resumeJob(id) {
+  await api(`/api/jobs/${id}/resume`, 'POST');
   if (typeof refresh === 'function') refresh();
 }
 

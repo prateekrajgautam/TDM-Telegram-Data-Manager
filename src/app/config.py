@@ -19,12 +19,25 @@ class Settings(BaseSettings):
     data_dir: Path = Path("/app/data")
     default_download_dir: Path = Path("/app/downloads")
 
-    # Job engine
-    max_concurrent_downloads: int = 1  # single-worker engine by default
+    # Job engine — downloads/exports and forwards are separate pools (see
+    # jobs.py docstring for why forwarding stays low by default).
+    max_concurrent_downloads: int = 2
+    max_concurrent_forwards: int = 1
+
+    # Fault tolerance: a single network step (one RPC call, one downloaded
+    # chunk) waits at most this long before being treated as a dead
+    # connection rather than hanging forever.
+    network_call_timeout_seconds: int = 30
+
+    # Watchdog: a job stuck at "running" with no progress update in this
+    # many minutes is assumed dead (e.g. the network dropped mid-job and
+    # never recovered) and is auto-marked "failed" so Retry/Resume works
+    # again, instead of sitting stuck until someone manually intervenes.
+    stale_job_minutes: int = 5
 
     # Bump this on every meaningful change — shown in logs and /health so you
     # can confirm a deployment is actually running the code you think it is.
-    app_version: str = "0.2.1"
+    app_version: str = "0.3.0"
 
     @property
     def database_url(self) -> str:

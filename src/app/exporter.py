@@ -3,6 +3,8 @@ streamed directly into the selected storage backend.
 """
 from __future__ import annotations
 
+import datetime
+
 import csv
 import io
 import json
@@ -52,7 +54,7 @@ async def run_export_job(job_id: int, backend: StorageBackend) -> None:
     async for msg in client.iter_messages(entity, limit=limit):
         messages.append(_serialize_message(msg))
         with get_session() as db:
-            db.query(Job).filter_by(id=job_id).update({Job.progress: len(messages)})
+            db.query(Job).filter_by(id=job_id).update({Job.progress: len(messages), Job.updated_at: datetime.datetime.utcnow()})
 
     with get_session() as db:
         db.query(Job).filter_by(id=job_id).update({Job.total: len(messages)})

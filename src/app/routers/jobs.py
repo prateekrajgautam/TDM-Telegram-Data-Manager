@@ -132,6 +132,43 @@ async def cancel_job(job_id: int):
     return {"status": "cancelled"}
 
 
+@router.post("/{job_id}/pause", response_model=JobOut)
+async def pause_job(job_id: int):
+    """Marks a running/pending job as paused. The worker checks status
+    between each message, so a running job stops within a moment; a
+    still-queued one simply won't start. Already-completed items stay
+    recorded — Resume picks back up from there."""
+    with get_session() as db:
+        job = db.query(Job).get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if job.job_type not in ("download", "forward"):
+            raise HTTPException(400, "Only download/forward jobs support pause.")
+        if job.status not in ("pending", "running"):
+            raise HTTPException(400, "Only pending or running jobs can be paused.")
+        job.status = "paused"
+        out = JobOut.model_validate(job)
+    return out
+
+
+@router.post("/{job_id}/resume", response_model=JobOut)
+async def resume_job(job_id: int):
+    """Re-enqueues a paused job. It resumes from where it left off — items
+    already recorded as done/forwarded in a prior run are skipped."""
+    with get_session() as db:
+        job = db.query(Job).get(job_id)
+        if not job:
+            raise HTTPException(404, "Job not found")
+        if job.status != "paused":
+            raise HTTPException(400, "Only paused jobs can be resumed.")
+        job.status = "pending"
+        job.error = None
+        job_id = job.id
+        out = JobOut.model_validate(job)
+    enqueue(job_id)
+    return out
+
+
 @router.post("/{job_id}/retry", response_model=JobOut)
 async def retry_job(job_id: int):
     with get_session() as db:

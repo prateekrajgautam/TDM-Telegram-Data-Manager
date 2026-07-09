@@ -8,7 +8,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.database import init_db
-from app.jobs import start_workers, requeue_pending
+from app.jobs import start_workers, requeue_pending, start_watchdog
 from app.logger import setup_logging, get_logger
 from app.routers import auth, dialogs, jobs, settings as settings_router
 from app.telegram_client import manager as tg_manager
@@ -27,6 +27,7 @@ async def lifespan(app: FastAPI):
     log.info("Session restored on startup: %s", restored)
     start_workers()
     requeue_pending()
+    start_watchdog()
     yield
 
 
